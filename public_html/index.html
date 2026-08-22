@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Enrollment Form - JsonPowerDB</title>
+    <!-- Include jQuery for AJAX requests -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <style>
+        body { font-family: Arial; display: flex; justify-content: center; padding-top: 40px; }
+        .container { width: 400px; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input { width: 100%; padding: 8px; box-sizing: border-box; }
+        input:disabled { background-color: #e9ecef; }
+        .buttons { display: flex; justify-content: space-between; margin-top: 20px; }
+        button { padding: 10px 15px; cursor: pointer; font-weight: bold; }
+        button:disabled { cursor: not-allowed; opacity: 0.6; }
+    </style>
+</head>
+<body onload="resetForm()">
+
+<div class="container">
+    <h2 style="text-align: center;">Student Enrollment</h2>
+    
+    <div class="form-group">
+        <label>Roll No (Primary Key)</label>
+        <input type="text" id="rollNo" onblur="checkStudent()">
+    </div>
+    <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="fullName">
+    </div>
+    <div class="form-group">
+        <label>Class</label>
+        <input type="text" id="studentClass">
+    </div>
+    <div class="form-group">
+        <label>Birth Date</label>
+        <input type="date" id="birthDate">
+    </div>
+    <div class="form-group">
+        <label>Address</label>
+        <input type="text" id="address">
+    </div>
+    <div class="form-group">
+        <label>Enrollment Date</label>
+        <input type="date" id="enrollmentDate">
+    </div>
+
+    <div class="buttons">
+        <button id="btnSave" onclick="saveData()">Save</button>
+        <button id="btnUpdate" onclick="updateData()">Update</button>
+        <button id="btnReset" onclick="resetForm()">Reset</button>
+    </div>
+</div>
+
+<script>
+    // --- JsonPowerDB Configuration ---
+    const CONN_TOKEN = "90933425|-31949147678866912|90904563"; 
+    const DB_NAME = "SCHOOL-DB";
+    const REL_NAME = "STUDENT-TABLE";
+    const BASE_URL = "http://api.login2explore.com:5577";
+    const IML_URI = "/api/iml";
+    const IRL_URI = "/api/irl";
+
+    // Step 2: Initialize / Reset Form
+    function resetForm() {
+        $("#rollNo").val("").prop("disabled", false);
+        $("#fullName").val("").prop("disabled", true);
+        $("#studentClass").val("").prop("disabled", true);
+        $("#birthDate").val("").prop("disabled", true);
+        $("#address").val("").prop("disabled", true);
+        $("#enrollmentDate").val("").prop("disabled", true);
+
+        $("#btnSave").prop("disabled", true);
+        $("#btnUpdate").prop("disabled", true);
+        $("#btnReset").prop("disabled", true);
+
+        $("#rollNo").focus();
+    }
+
+    // Check if Primary Key exists
+    function checkStudent() {
+        let rollNo = $("#rollNo").val().trim();
+        if (rollNo === "") return;
+
+        let getReqStr = JSON.stringify({
+            token: CONN_TOKEN,
+            dbName: DB_NAME,
+            cmd: "GET_BY_KEY",
+            rel: REL_NAME,
+            createTime: false,
+            updateTime: false,
+            jsonStr: { "Roll-No": rollNo }
+        });
+
+        $.ajax({
+            url: BASE_URL + IRL_URI,
+            type: "POST",
+            data: getReqStr,
+            success: function(response) {
+                let resObj = JSON.parse(response);
+                
+                if (resObj.status === 400) {
+                    // Record DOES NOT exist -> Enable Save
+                    enableFields();
+                    $("#btnSave").prop("disabled", false);
+                    $("#btnUpdate").prop("disabled", true);
+                    $("#btnReset").prop("disabled", false);
+                    $("#fullName").focus();
+                } else if (resObj.status === 200) {
+                    // Record EXISTS -> Enable Update & Fill Data
+                    let data = JSON.parse(resObj.data).record;
+                    
+                    $("#fullName").val(data["Full-Name"]);
+                    $("#studentClass").val(data["Class"]);
+                    $("#birthDate").val(data["Birth-Date"]);
+                    $("#address").val(data["Address"]);
+                    $("#enrollmentDate").val(data["Enrollment-Date"]);
+
+                    $("#rollNo").prop("disabled", true);
+                    enableFields();
+                    
+                    $("#btnSave").prop("disabled", true);
+                    $("#btnUpdate").prop("disabled", false);
+                    $("#btnReset").prop("disabled", false);
+                    $("#fullName").focus();
+                    
+                    // Store the record number (rec_no) invisibly for updating
+                    localStorage.setItem("rec_no", JSON.parse(resObj.data).rec_no);
+                }
+            },
+            error: function(err) {
+                alert("API Error");
+            }
+        });
+    }
+
+    function enableFields() {
+        $("#fullName").prop("disabled", false);
+        $("#studentClass").prop("disabled", false);
+        $("#birthDate").prop("disabled", false);
+        $("#address").prop("disabled", false);
+        $("#enrollmentDate").prop("disabled", false);
+    }
+
+    function validateData() {
+        let data = {
+            "Roll-No": $("#rollNo").val().trim(),
+            "Full-Name": $("#fullName").val().trim(),
+            "Class": $("#studentClass").val().trim(),
+            "Birth-Date": $("#birthDate").val().trim(),
+            "Address": $("#address").val().trim(),
+            "Enrollment-Date": $("#enrollmentDate").val().trim()
+        };
+
+        for (let key in data) {
+            if (data[key] === "") {
+                alert("All fields are required!");
+                return null;
+            }
+        }
+        return JSON.stringify(data);
+    }
+
+    // Save Data (PUT Command)
+    function saveData() {
+        let jsonStr = validateData();
+        if (!jsonStr) return;
+
+        let putReqStr = JSON.stringify({
+            token: CONN_TOKEN,
+            dbName: DB_NAME,
+            cmd: "PUT",
+            rel: REL_NAME,
+            jsonStr: JSON.parse(jsonStr)
+        });
+
+        executeCommand(putReqStr, "Student record saved successfully!");
+    }
+
+    // Update Data (UPDATE Command)
+    function updateData() {
+        let jsonStr = validateData();
+        if (!jsonStr) return;
+
+        let recNo = localStorage.getItem("rec_no");
+        
+        let updateReqStr = JSON.stringify({
+            token: CONN_TOKEN,
+            dbName: DB_NAME,
+            cmd: "UPDATE",
+            rel: REL_NAME,
+            jsonStr: { [recNo]: JSON.parse(jsonStr) }
+        });
+
+        executeCommand(updateReqStr, "Student record updated successfully!");
+    }
+
+    // Helper to send POST request
+    function executeCommand(reqString, successMsg) {
+        $.ajax({
+            url: BASE_URL + IML_URI,
+            type: "POST",
+            data: reqString,
+            success: function(response) {
+                alert(successMsg);
+                resetForm(); // Go to step 2
+            },
+            error: function(err) {
+                alert("Error executing command.");
+            }
+        });
+    }
+</script>
+</body>
+</html>
